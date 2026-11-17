@@ -4,22 +4,46 @@ const CONFIG = {
   defaultBg: 'url(https://www.tccards.tn/Assets/background.png) center fixed',
   defaultProfilePic: 'https://www.tccards.tn/Assets/default.png',
   databases: {
-    id: 'AKfycbwKdG3ktzHcukFjVCxaMqn6Twyj_Qioj1yoQt5Dj5QmsZxE3wvLaaU4zFBOZbWJNGYX',
+    id: '1tvVAN9sQ4yNPV0om2RKb8EiejoYn8eytTOEi9k26g0E',
     plan: 'standard',
   },
+  analyticsEndpoint: 'https://script.google.com/macros/s/AKfycbyjSiucNkuqZ5ngFV5AwX1rG1ZKSuEmZLmU1mffvW4MDIpxxMhUcuUjc6actnXam9vjdw/exec',
   styles: {
     corporateGradient: { background: 'linear-gradient(145deg, rgb(9, 9, 11), rgb(24, 24, 27), rgb(9, 9, 11))' },
     oceanGradient: { background: 'linear-gradient(145deg, rgb(2, 6, 23), rgb(15, 23, 42), rgb(2, 6, 23))' },
   },
 };
 
-const RANDOM_PROFILE_LINKS = [
-  'Ali','SkanDev','yassine','mehdigh','Oussemabennour','Paralingua','Keeto','houssem',
-  'Emna','Omar','Mohamed','Hamza','Oussema','the_cyber_corner','Seddik','Nour','Ameni','Chiheb'
-];
+const RANDOM_PROFILE_LINKS = ['Ali','Keeto','Oussemabennour'];
 
 let currentTheme = 'dark';
 let currentAccent = '';
+let activeAnalyticsId = '';
+
+function trackAnalyticsEvent(eventType, details = {}) {
+  if (!activeAnalyticsId ||
+      CONFIG.analyticsEndpoint.includes('YOUR_STANDARD_CODE_GS_DEPLOYMENT_ID')) return;
+
+  const body = JSON.stringify({
+    action: 'trackAnalytics',
+    analyticsId: activeAnalyticsId,
+    eventType,
+    details
+  });
+
+  try {
+    const beaconBody = new Blob([body], { type: 'text/plain;charset=UTF-8' });
+    if (navigator.sendBeacon?.(CONFIG.analyticsEndpoint, beaconBody)) return;
+  } catch (_) {}
+
+  fetch(CONFIG.analyticsEndpoint, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+    body,
+    keepalive: true
+  }).catch(() => {});
+}
 
 document.addEventListener('DOMContentLoaded', function () {
   setupProfileImageLightbox();
@@ -280,6 +304,7 @@ function handleProfileData(data, plan, isIdView = false) {
       name:          getField(data, 'Name') || 'User',
       link:          getField(data, 'Link') || 'tccards',
       id:            getField(data, 'ID'),
+      analyticsId:   getField(data, 'Analytics ID') || getField(data, 'ID'),
       tagline:       getField(data, 'Tagline'),
       profilePic:    getField(data, 'Profile Picture URL', 'Profile Picture', 'Profile Pic') || CONFIG.defaultProfilePic,
       socialLinks:   normalizeSocialLinks(getField(data, 'Social Links', 'SocialLinks')),
@@ -326,6 +351,38 @@ function handleProfileData(data, plan, isIdView = false) {
       cardOpacity,
       interactive: true,
     });
+
+    activeAnalyticsId = profileData.analyticsId;
+    if (!container.dataset.analyticsBound) {
+      container.dataset.analyticsBound = '1';
+      container.addEventListener('click', event => {
+        const anchor = event.target.closest('a[href]');
+        if (!anchor || !container.contains(anchor)) return;
+
+        const href = anchor.getAttribute('href') || '';
+        if (/^mailto:/i.test(href)) {
+          trackAnalyticsEvent('contact_email');
+          return;
+        }
+        if (/^tel:/i.test(href)) {
+          trackAnalyticsEvent('contact_phone');
+          return;
+        }
+        if (/maps\.google|maps\.app/i.test(href)) {
+          trackAnalyticsEvent('contact_location');
+          return;
+        }
+
+        try {
+          const url = new URL(anchor.href);
+          if ((url.protocol === 'http:' || url.protocol === 'https:') &&
+              url.hostname !== window.location.hostname) {
+            trackAnalyticsEvent('link_click', { domain: url.hostname });
+          }
+        } catch (_) {}
+      });
+    }
+    trackAnalyticsEvent('view');
 
     console.log('Profile loaded', { template: template || 'classic' });
   } catch (error) {
@@ -453,9 +510,17 @@ async function showContactDetails(contact) {
       showConfirmButton: false, showCancelButton: false, allowOutsideClick: false,
       customClass: { closeButton: 'swal-close-button-custom', popup: popup.isLight ? 'swal-theme-light' : 'swal-theme-dark' },
       didOpen: (modal) => {
+        modal.querySelector('a[href^="mailto:"]')
+          ?.addEventListener('click', () => trackAnalyticsEvent('contact_email'));
+        modal.querySelector('a[href^="tel:"]')
+          ?.addEventListener('click', () => trackAnalyticsEvent('contact_phone'));
+        modal.querySelector('a[href*="maps.google.com"]')
+          ?.addEventListener('click', () => trackAnalyticsEvent('contact_location'));
+
         modal.querySelector('#copyDetailsBtn')?.addEventListener('click', async (e) => {
           e.stopPropagation();
           const copied = await copyContactDetails(contact);
+          if (copied) trackAnalyticsEvent('copy_details');
           Swal.fire({
             icon: copied ? 'success' : 'error',
             title: copied ? 'Copied!' : 'Copy failed',
@@ -468,6 +533,7 @@ async function showContactDetails(contact) {
           e.stopPropagation();
           try {
             const vcard = generateVCard(contact);
+            trackAnalyticsEvent('save_contact');
             const fileName = `${contact.name || 'contact'}.vcf`;
             const shared = await shareVCardFile(vcard, fileName);
             if (shared) {
@@ -509,6 +575,7 @@ window.showContactDetails = showContactDetails;
 window.showShareOptions = showShareOptions;
 
 async function showShareOptions(link) {
+  trackAnalyticsEvent('share_click');
   try {
     if (navigator.share) {
       await navigator.share({ title: 'Check out this profile', text: 'View my digital business card', url: link });

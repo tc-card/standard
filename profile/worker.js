@@ -20,7 +20,7 @@ export default {
       let cached = await cache.match(cacheKey);
       if (cached) return cached;
 
-      const apiUrl = `https://script.google.com/macros/s/AKfycbwKdG3ktzHcukFjVCxaMqn6Twyj_Qioj1yoQt5Dj5QmsZxE3wvLaaU4zFBOZbWJNGYX/exec?link=${username}`;
+      const apiUrl = `https://script.google.com/macros/s/AKfycbyjSiucNkuqZ5ngFV5AwX1rG1ZKSuEmZLmU1mffvW4MDIpxxMhUcuUjc6actnXam9vjdw/exec?link=${username}`;
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 2500);
