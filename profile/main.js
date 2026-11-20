@@ -1,34 +1,29 @@
-import { renderCardHtml, parseStyleParams, backgroundLayerHtml } from './renderer.js';
+import { renderCardHtml, parseStyleParams, backgroundLayerHtml, colorsForTheme, onColor } from './renderer.js';
+import { setPopupTheme, showPopup, showAlert, showToast } from './popup.js';
 
 const CONFIG = {
   defaultBg: 'url(https://www.tccards.tn/Assets/background.png) center fixed',
   defaultProfilePic: 'https://www.tccards.tn/Assets/default.png',
   databases: {
     id: 'AKfycbyjSiucNkuqZ5ngFV5AwX1rG1ZKSuEmZLmU1mffvW4MDIpxxMhUcuUjc6actnXam9vjdw',
-    plan: 'standard',
   },
   analyticsEndpoint: 'https://script.google.com/macros/s/AKfycbyjSiucNkuqZ5ngFV5AwX1rG1ZKSuEmZLmU1mffvW4MDIpxxMhUcuUjc6actnXam9vjdw/exec',
-  styles: {
-    corporateGradient: { background: 'linear-gradient(145deg, rgb(9, 9, 11), rgb(24, 24, 27), rgb(9, 9, 11))' },
-    oceanGradient: { background: 'linear-gradient(145deg, rgb(2, 6, 23), rgb(15, 23, 42), rgb(2, 6, 23))' },
-  },
 };
 
-const RANDOM_PROFILE_LINKS = ['Ali','Keeto','Oussemabennour'];
+/* #random picks a real profile so the URL resolves cleanly. */
+const RANDOM_PROFILE_LINKS = ['Ali', 'Keeto', 'Oussemabennour'];
 
-let currentTheme = 'dark';
-let currentAccent = '';
 let activeAnalyticsId = '';
 
+/* Fire-and-forget analytics. sendBeacon keeps events alive across page navigations. */
 function trackAnalyticsEvent(eventType, details = {}) {
-  if (!activeAnalyticsId ||
-      CONFIG.analyticsEndpoint.includes('YOUR_STANDARD_CODE_GS_DEPLOYMENT_ID')) return;
+  if (!activeAnalyticsId) return;
 
   const body = JSON.stringify({
     action: 'trackAnalytics',
     analyticsId: activeAnalyticsId,
     eventType,
-    details
+    details,
   });
 
   try {
@@ -41,17 +36,12 @@ function trackAnalyticsEvent(eventType, details = {}) {
     mode: 'no-cors',
     headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
     body,
-    keepalive: true
+    keepalive: true,
   }).catch(() => {});
 }
 
 document.addEventListener('DOMContentLoaded', function () {
   setupProfileImageLightbox();
-
-  const formatDetection = document.createElement('meta');
-  formatDetection.name = 'format-detection';
-  formatDetection.content = 'telephone=no, email=no, address=no';
-  document.head.appendChild(formatDetection);
 
   document.body.style.background = CONFIG.defaultBg;
   document.body.style.backgroundSize = 'cover';
@@ -76,6 +66,7 @@ document.addEventListener('DOMContentLoaded', function () {
   searchProfile(identifier, isIdLookup);
 });
 
+/* ── Image lightbox ──────────────────────────────────────── */
 function setupProfileImageLightbox() {
   document.addEventListener('click', (event) => {
     const image = event.target.closest('.profile-image-trigger');
@@ -84,7 +75,6 @@ function setupProfileImageLightbox() {
       openProfileImage(image);
       return;
     }
-
     const lightbox = document.getElementById('profileImageLightbox');
     if (lightbox && event.target === lightbox) closeProfileImage();
   });
@@ -134,12 +124,12 @@ function openProfileImage(sourceImage) {
 function closeProfileImage() {
   const lightbox = document.getElementById('profileImageLightbox');
   if (!lightbox || lightbox.hidden) return;
-
   lightbox.classList.remove('is-open');
   document.body.classList.remove('profile-image-lightbox-open');
   setTimeout(() => { lightbox.hidden = true; }, 180);
 }
 
+/* ── Profile fetch ───────────────────────────────────────── */
 async function searchProfile(identifier, isIdLookup) {
   try {
     const param = isIdLookup ? 'id' : 'link';
@@ -153,7 +143,7 @@ async function searchProfile(identifier, isIdLookup) {
       return;
     }
     if (data && typeof data === 'object') {
-      handleProfileData(data, undefined, isIdLookup);
+      handleProfileData(data, isIdLookup);
     } else {
       showError('Invalid profile data');
     }
@@ -174,6 +164,7 @@ async function fetchWithTimeout(resource, options = {}) {
   }
 }
 
+/* Case- and separator-insensitive header matching (e.g. "Profile Picture" == "profile_picture"). */
 function fieldKeyMatches(left, right) {
   const a = String(left).replace(/[^a-z0-9]/gi, '');
   const b = String(right).replace(/[^a-z0-9]/gi, '');
@@ -196,7 +187,10 @@ function getField(data, ...candidates) {
   return '';
 }
 
-/* ── Background resolver now returns template + accent ───── */
+/* ── Background resolver ────────────────────────────────── */
+/* Splits the style string into { background, theme, isImage, template, accent, … }.
+   Themes: 'default' when the style string is empty, otherwise 'dark' or 'light'
+   parsed from a trailing /dark or /light on the base. */
 function resolveBackground(selectedStyle) {
   const params = parseStyleParams(selectedStyle);
   const { base, template, accent } = params;
@@ -228,55 +222,8 @@ function resolveBackground(selectedStyle) {
   return { background: CONFIG.defaultBg, theme: 'default', isImage: true, template, accent, ...extra };
 }
 
-function getPopupTheme() {
-  const accent = currentAccent || (currentTheme === 'light' ? '#2563eb' : '#3b82f6');
-  const accentText = getReadableAccentText(accent);
-
-  if (currentTheme === 'light') {
-    return {
-      background: '#f1f5f9',
-      color: '#0f172a',
-      toastBg: '#e2e8f0',
-      toastColor: '#0f172a',
-      accent,
-      accentText,
-      isLight: true,
-    };
-  }
-  if (currentTheme === 'default') {
-    return {
-      background: '#0f172a',
-      color: '#ffffff',
-      toastBg: '#0b1220',
-      toastColor: '#ffffff',
-      accent,
-      accentText,
-      isLight: false,
-    };
-  }
-  return {
-    background: '#111827',
-    color: '#ffffff',
-    toastBg: '#0b1220',
-    toastColor: '#ffffff',
-    accent,
-    accentText,
-    isLight: false,
-  };
-}
-
-function getReadableAccentText(hex) {
-  const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex || '');
-  if (!match) return '#ffffff';
-  const value = match[1].length === 3
-    ? match[1].split('').map((part) => part + part).join('')
-    : match[1];
-  const [red, green, blue] = [0, 2, 4].map((index) => parseInt(value.slice(index, index + 2), 16));
-  const luminance = (red * 299 + green * 587 + blue * 114) / 1000;
-  return luminance > 160 ? '#111827' : '#ffffff';
-}
-
-function handleProfileData(data, plan, isIdView = false) {
+/* ── Profile render ──────────────────────────────────────── */
+function handleProfileData(data, isIdView = false) {
   const loader = document.querySelector('.loader');
   if (loader) {
     loader.style.transition = 'opacity 0.5s ease';
@@ -285,7 +232,6 @@ function handleProfileData(data, plan, isIdView = false) {
   }
 
   data = data.data || data;
-  plan = plan || 'free';
 
   if (!data || typeof data !== 'object') { showError('Invalid profile data received'); return; }
   if (data.status === 'error') { showError(data?.message || 'Profile data could not be loaded'); return; }
@@ -314,24 +260,18 @@ function handleProfileData(data, plan, isIdView = false) {
       selectedStyle: getField(data, 'Selected Style', 'Style') || '',
     };
 
-    const shareUrl = isIdView
-      ? `https://my.tccards.tn/id_${profileData.id}`
-      : `https://my.tccards.tn/@${escapeHtml(profileData.link)}`;
-
     updateMetaTags(profileData, isIdView);
 
     const { background, theme, isImage, template, accent, cardBlur, bgBlur, cardOpacity } = resolveBackground(profileData.selectedStyle);
 
-    currentTheme = theme;
-    currentAccent = accent || '';
     document.body.dataset.theme = theme;
     document.body.style.background = background;
     document.body.style.backgroundSize = isImage ? 'cover' : 'auto';
     document.body.style.backgroundPosition = 'center';
     document.body.style.backgroundRepeat = 'no-repeat';
 
-    // Background blur is opt-in per profile (bb=). Unset keeps the legacy look untouched;
-    // bb=0 turns the old body blur off; bb>0 blurs a dedicated layer so the card stays sharp.
+    /* Background blur is opt-in per profile (bb=). Unset keeps the legacy look untouched;
+       bb=0 turns the old body blur off; bb>0 inserts a dedicated layer so the card stays sharp. */
     if (bgBlur !== null) {
       document.body.style.backdropFilter = '';
       document.getElementById('bgBlurLayer')?.remove();
@@ -342,6 +282,21 @@ function handleProfileData(data, plan, isIdView = false) {
         document.body.insertAdjacentHTML('afterbegin', layer);
       }
     }
+
+    /* Popups mirror the card exactly — same theme inputs, same helpers, zero drift. */
+    const cardColors = colorsForTheme(theme, { cardBlur, cardOpacity });
+    const accentResolved = accent || (theme === 'light' ? '#2563eb' : '#3b82f6');
+    setPopupTheme({
+      bg: cardColors.cardBg,
+      border: cardColors.cardBorder,
+      text: cardColors.text,
+      sub: cardColors.sub,
+      item: cardColors.itemBg,
+      itemHover: cardColors.itemHover,
+      accent: accentResolved,
+      accentText: onColor(accentResolved),
+      blur: cardBlur ?? 20,
+    });
 
     container.innerHTML = renderCardHtml(profileData, {
       theme,
@@ -358,21 +313,10 @@ function handleProfileData(data, plan, isIdView = false) {
       container.addEventListener('click', event => {
         const anchor = event.target.closest('a[href]');
         if (!anchor || !container.contains(anchor)) return;
-
         const href = anchor.getAttribute('href') || '';
-        if (/^mailto:/i.test(href)) {
-          trackAnalyticsEvent('contact_email');
-          return;
-        }
-        if (/^tel:/i.test(href)) {
-          trackAnalyticsEvent('contact_phone');
-          return;
-        }
-        if (/maps\.google|maps\.app/i.test(href)) {
-          trackAnalyticsEvent('contact_location');
-          return;
-        }
-
+        if (/^mailto:/i.test(href)) { trackAnalyticsEvent('contact_email'); return; }
+        if (/^tel:/i.test(href))    { trackAnalyticsEvent('contact_phone'); return; }
+        if (/maps\.google|maps\.app/i.test(href)) { trackAnalyticsEvent('contact_location'); return; }
         try {
           const url = new URL(anchor.href);
           if ((url.protocol === 'http:' || url.protocol === 'https:') &&
@@ -383,8 +327,6 @@ function handleProfileData(data, plan, isIdView = false) {
       });
     }
     trackAnalyticsEvent('view');
-
-    console.log('Profile loaded', { template: template || 'classic' });
   } catch (error) {
     console.error('Profile rendering error:', error);
     showError('Error displaying profile');
@@ -395,13 +337,11 @@ function updateMetaTags(profileData, isIdView) {
   const profileUrl = isIdView
     ? `https://my.tccards.tn/id_${profileData.id}`
     : `https://my.tccards.tn/@${profileData.link}`;
-
   const title = `${profileData.name} | Total Connect NFC`;
   const description = profileData.tagline
     ? `${profileData.tagline} — View ${profileData.name}'s digital business card.`
     : `View and save ${profileData.name}'s digital business card, powered by Total Connect NFC.`;
   const image = profileData.profilePic || 'https://www.tccards.tn/Assets/150.png';
-
   document.title = title;
 
   const setMeta = (selector, attr, value) => {
@@ -416,10 +356,8 @@ function updateMetaTags(profileData, isIdView) {
   };
 
   setMeta('meta[name="description"]', 'content', description);
-
   const canonical = document.querySelector('link[rel="canonical"]');
   if (canonical) canonical.href = profileUrl;
-
   setMeta('meta[property="og:title"]', 'content', title);
   setMeta('meta[property="og:description"]', 'content', description);
   setMeta('meta[property="og:image"]', 'content', image);
@@ -435,7 +373,7 @@ function normalizeSocialLinks(links) {
   return links.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 }
 
-/* ── vCard & contact (unchanged) ─────────────────────────── */
+/* ── vCard & contact ─────────────────────────────────────── */
 function generateVCard(contact) {
   const fullName = contact.name || 'Contact';
   const email = contact.email || '';
@@ -443,8 +381,8 @@ function generateVCard(contact) {
   const address = contact.address || '';
   let vcard = 'BEGIN:VCARD\nVERSION:3.0\n';
   vcard += `FN:${fullName}\nN:${fullName};;;\n`;
-  if (email) vcard += `EMAIL:${email}\n`;
-  if (phone) vcard += `TEL:${phone}\n`;
+  if (email)   vcard += `EMAIL:${email}\n`;
+  if (phone)   vcard += `TEL:${phone}\n`;
   if (address) vcard += `ADR:;;${address};;;\n`;
   vcard += 'END:VCARD';
   return vcard;
@@ -461,6 +399,7 @@ function downloadVCard(vcardString, filename = 'contact.vcf') {
   URL.revokeObjectURL(link.href);
 }
 
+/* Prefer the OS share sheet (works on iOS/Android). Returns true if shared, false to fall back. */
 async function shareVCardFile(vcardString, fileName) {
   if (navigator.share && navigator.canShare) {
     try {
@@ -478,8 +417,8 @@ async function shareVCardFile(vcardString, fileName) {
 async function copyContactDetails(contact) {
   const lines = [
     contact.name,
-    contact.email && `Email: ${contact.email}`,
-    contact.phone && `Phone: ${contact.phone}`,
+    contact.email   && `Email: ${contact.email}`,
+    contact.phone   && `Phone: ${contact.phone}`,
     contact.address && `Address: ${contact.address}`,
   ].filter(Boolean);
   try { await navigator.clipboard.writeText(lines.join('\n')); return true; }
@@ -487,72 +426,60 @@ async function copyContactDetails(contact) {
 }
 
 async function showContactDetails(contact) {
-  try {
-    if (!contact || typeof contact !== 'object') throw new Error('Invalid contact data');
-    const popup = getPopupTheme();
-    const contactHtml = `
-      <div class="contact-details" x-apple-data-detectors="false" style="--contact-accent:${popup.accent};--contact-accent-text:${popup.accentText};">
-        <h3 class="contact-name">${escapeHtml(contact.name)}</h3>
-        <div class="contact-detail-list" x-apple-data-detectors="false">
-          ${contact.email ? `<div class="contact-detail-item"><i class="fas fa-envelope"></i><a href="mailto:${escapeHtml(contact.email)}">${escapeHtml(contact.email)}</a></div>` : ''}
-          ${contact.phone ? `<div class="contact-detail-item"><i class="fas fa-phone"></i><a href="tel:${escapeHtml(contact.phone)}">${escapeHtml(contact.phone)}</a></div>` : ''}
-          ${contact.address ? `<div class="contact-detail-item"><i class="fas fa-map-marker-alt"></i><a href="https://maps.google.com/?q=${encodeURIComponent(contact.address)}" target="_blank" rel="noopener">${escapeHtml(contact.address)}</a></div>` : ''}
-        </div>
-        <div class="contact-actions-row">
-          <button class="contact-action-btn copy-btn" id="copyDetailsBtn"><i class="fas fa-copy"></i> Copy Details</button>
-          <button class="contact-action-btn save-btn" id="saveContactBtn"><i class="fas fa-save"></i> Save Contact</button>
-        </div>
-      </div>`;
-    await Swal.fire({
-      title: 'Contact Details', html: contactHtml,
-      background: popup.background, color: popup.color,
-      showCloseButton: true, closeButtonHtml: '✕',
-      showConfirmButton: false, showCancelButton: false, allowOutsideClick: false,
-      customClass: { closeButton: 'swal-close-button-custom', popup: popup.isLight ? 'swal-theme-light' : 'swal-theme-dark' },
-      didOpen: (modal) => {
-        modal.querySelector('a[href^="mailto:"]')
-          ?.addEventListener('click', () => trackAnalyticsEvent('contact_email'));
-        modal.querySelector('a[href^="tel:"]')
-          ?.addEventListener('click', () => trackAnalyticsEvent('contact_phone'));
-        modal.querySelector('a[href*="maps.google.com"]')
-          ?.addEventListener('click', () => trackAnalyticsEvent('contact_location'));
-
-        modal.querySelector('#copyDetailsBtn')?.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          const copied = await copyContactDetails(contact);
-          if (copied) trackAnalyticsEvent('copy_details');
-          Swal.fire({
-            icon: copied ? 'success' : 'error',
-            title: copied ? 'Copied!' : 'Copy failed',
-            text: copied ? undefined : 'Please allow clipboard access.',
-            toast: true, position: 'center', showConfirmButton: false, timer: 1800, timerProgressBar: true,
-            background: popup.toastBg, color: popup.toastColor,
-          });
-        });
-        modal.querySelector('#saveContactBtn')?.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          try {
-            const vcard = generateVCard(contact);
-            trackAnalyticsEvent('save_contact');
-            const fileName = `${contact.name || 'contact'}.vcf`;
-            const shared = await shareVCardFile(vcard, fileName);
-            if (shared) {
-              Swal.fire({ icon: 'success', title: 'Contact Shared!', text: 'Use the share sheet to add to contacts.', background: popup.background, color: popup.color, confirmButtonColor: popup.accent });
-              return;
-            }
-            downloadVCard(vcard, fileName);
-            Swal.fire({ icon: 'success', title: 'Contact Saved!', text: 'The vCard file has been downloaded.', toast: true, position: 'center', showConfirmButton: false, timer: 2000, timerProgressBar: true, background: popup.toastBg, color: popup.toastColor });
-          } catch (err) {
-            Swal.fire({ icon: 'error', title: 'Save failed', text: 'Could not save contact.', background: popup.background, color: popup.color });
-          }
-        });
-      },
-    });
-  } catch (error) {
-    console.error('Error in showContactDetails:', error);
-    const popup = getPopupTheme();
-    await Swal.fire({ icon: 'error', title: 'Error', text: 'Could not display contact details', background: popup.background, color: popup.color });
+  if (!contact || typeof contact !== 'object') {
+    showAlert({ icon: 'error', title: 'Error', text: 'Could not display contact details' });
+    return;
   }
+  const contactHtml = `
+    <div class="contact-details" x-apple-data-detectors="false">
+      <h3 class="contact-name">${escapeHtml(contact.name)}</h3>
+      <div class="contact-detail-list" x-apple-data-detectors="false">
+        ${contact.email ? `<div class="contact-detail-item"><i class="fas fa-envelope"></i><a href="mailto:${escapeHtml(contact.email)}">${escapeHtml(contact.email)}</a></div>` : ''}
+        ${contact.phone ? `<div class="contact-detail-item"><i class="fas fa-phone"></i><a href="tel:${escapeHtml(contact.phone)}">${escapeHtml(contact.phone)}</a></div>` : ''}
+        ${contact.address ? `<div class="contact-detail-item"><i class="fas fa-map-marker-alt"></i><a href="https://maps.google.com/?q=${encodeURIComponent(contact.address)}" target="_blank" rel="noopener">${escapeHtml(contact.address)}</a></div>` : ''}
+      </div>
+      <div class="contact-actions-row">
+        <button class="contact-action-btn copy-btn" id="copyDetailsBtn"><i class="fas fa-copy"></i> Copy Details</button>
+        <button class="contact-action-btn save-btn" id="saveContactBtn"><i class="fas fa-save"></i> Save Contact</button>
+      </div>
+    </div>`;
+
+  showPopup({
+    content: contactHtml,
+    label: 'Contact Details',
+    onMount: (body) => {
+      body.querySelector('a[href^="mailto:"]')?.addEventListener('click', () => trackAnalyticsEvent('contact_email'));
+      body.querySelector('a[href^="tel:"]')?.addEventListener('click', () => trackAnalyticsEvent('contact_phone'));
+      body.querySelector('a[href*="maps.google.com"]')?.addEventListener('click', () => trackAnalyticsEvent('contact_location'));
+
+      body.querySelector('#copyDetailsBtn')?.addEventListener('click', async () => {
+        const copied = await copyContactDetails(contact);
+        if (copied) trackAnalyticsEvent('copy_details');
+        showToast({
+          icon: copied ? 'success' : 'error',
+          title: copied ? 'Copied!' : 'Copy failed',
+          text: copied ? undefined : 'Please allow clipboard access.',
+        });
+      });
+
+      body.querySelector('#saveContactBtn')?.addEventListener('click', async () => {
+        try {
+          const vcard = generateVCard(contact);
+          trackAnalyticsEvent('save_contact');
+          const fileName = `${contact.name || 'contact'}.vcf`;
+          const shared = await shareVCardFile(vcard, fileName);
+          if (shared) {
+            showToast({ icon: 'success', title: 'Contact Shared!', text: 'Use the share sheet to add to contacts.' });
+            return;
+          }
+          downloadVCard(vcard, fileName);
+          showToast({ icon: 'success', title: 'Contact Saved!', text: 'The vCard file has been downloaded.' });
+        } catch (err) {
+          showAlert({ icon: 'error', title: 'Save failed', text: 'Could not save contact.' });
+        }
+      });
+    },
+  });
 }
 
 function escapeHtml(unsafe) {
@@ -571,32 +498,29 @@ function showError(message) {
   document.querySelector('.loader')?.remove();
 }
 
+/* Exposed globally so renderer.js's inline onclick handlers can reach them. */
 window.showContactDetails = showContactDetails;
 window.showShareOptions = showShareOptions;
 
 async function showShareOptions(link) {
   trackAnalyticsEvent('share_click');
-  try {
-    if (navigator.share) {
+  if (navigator.share) {
+    try {
       await navigator.share({ title: 'Check out this profile', text: 'View my digital business card', url: link });
-    } else {
-      const popup = getPopupTheme();
-      const shareHtml = `
-        <div class="share-options">
-          <h3>Share this profile</h3>
-          <div class="share-links">
-            <a href="https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}" target="_blank" rel="noopener" class="share-link facebook">Facebook</a>
-            <a href="https://twitter.com/intent/tweet?url=${encodeURIComponent(link)}" target="_blank" rel="noopener" class="share-link twitter">Twitter</a>
-            <a href="https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(link)}" target="_blank" rel="noopener" class="share-link linkedin">LinkedIn</a>
-            <a href="https://api.whatsapp.com/send?text=${encodeURIComponent(link)}" target="_blank" rel="noopener" class="share-link whatsapp">WhatsApp</a>
-          </div>
-        </div>`;
-      Swal.fire({
-        title: 'Share Profile', html: shareHtml,
-        showCancelButton: true, cancelButtonText: 'Close',
-        background: popup.background, color: popup.color,
-        customClass: { confirmButton: 'swal-confirm-button', cancelButton: 'swal-cancel-button', popup: popup.isLight ? 'swal-theme-light' : 'swal-theme-dark' },
-      });
+    } catch (err) {
+      /* User cancelled — don't fall back to the modal */
     }
-  } catch (error) { console.error('Error sharing:', error); }
+    return;
+  }
+  const shareHtml = `
+    <div class="share-options">
+      <h3>Share this profile</h3>
+      <div class="share-links">
+        <a href="https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}" target="_blank" rel="noopener" class="share-link facebook">Facebook</a>
+        <a href="https://twitter.com/intent/tweet?url=${encodeURIComponent(link)}" target="_blank" rel="noopener" class="share-link twitter">Twitter</a>
+        <a href="https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(link)}" target="_blank" rel="noopener" class="share-link linkedin">LinkedIn</a>
+        <a href="https://api.whatsapp.com/send?text=${encodeURIComponent(link)}" target="_blank" rel="noopener" class="share-link whatsapp">WhatsApp</a>
+      </div>
+    </div>`;
+  showPopup({ content: shareHtml, label: 'Share Profile' });
 }

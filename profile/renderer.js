@@ -1,4 +1,6 @@
-/* renderer.js — shared card renderer (editor + presenter: keep byte-identical).
+/* renderer.js — shared card renderer used by both the editor and the presenter.
+ * Parity target is displayed output, not byte identity: the same profile data
+ * and the same options must produce visually identical cards in both places.
  * Pure functions; no DOM reads.
  *
  * Style string (the single DB column), all optional, order-independent:
@@ -108,7 +110,7 @@ function domainOf(url) {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; }
 }
 
-function colorsForTheme(theme, o) {
+export function colorsForTheme(theme, o) {
   let c;
   if (theme === 'light') {
     c = {
@@ -165,7 +167,7 @@ function defaultAccent(theme) {
 }
 
 /* Readable label colour on an accent fill. Threshold keeps blues white, flips ambers/limes dark. */
-function onColor(hex) {
+export function onColor(hex) {
   const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex || '');
   if (!m) return '#ffffff';
   let h = m[1];
@@ -260,7 +262,6 @@ function contactButton(profile, theme, accent, interactive, extraClass = '') {
     ? `onclick='showContactDetails(${escapeHtml(
         JSON.stringify({
           name: profile.name,
-          profilepic: profile.profilePic,
           email: profile.email,
           phone: profile.phone,
           address: profile.address,
@@ -291,7 +292,7 @@ function footer(theme, variant = 'default') {
 /* ── Template renderers ───────────────────────────────────── */
 
 const RENDERERS = {
-  /* ─── Classic — pixel-matched to today's card ─────────────── */
+  /* Classic — the original card, kept as the fallback when no template is set. */
   classic: (p, ctx) => {
     const { theme, accent, interactive } = ctx;
     const c = colorsForTheme(theme, ctx);
@@ -315,7 +316,7 @@ const RENDERERS = {
       </div>`;
   },
 
-  /* ─── Hero — blurred cover from the photo, avatar straddles ── */
+  /* Hero — blurred cover from the profile photo, avatar straddles the edge. */
   hero: (p, ctx) => {
     const { theme, accent, interactive } = ctx;
     const c = colorsForTheme(theme, ctx);
@@ -345,7 +346,7 @@ const RENDERERS = {
       </div>`;
   },
 
-  /* ─── Split — two-column professional ─────────────────────── */
+  /* Split — two-column professional layout. */
   split: (p, ctx) => {
     const { theme, accent, interactive } = ctx;
     const c = colorsForTheme(theme, ctx);
@@ -371,7 +372,7 @@ const RENDERERS = {
       </div>`;
   },
 
-  /* ─── Minimal — no card, poster-on-background ─────────────── */
+  /* Minimal — no card chrome; the background is the design. */
   minimal: (p, ctx) => {
     const { theme, accent, interactive } = ctx;
     const c = colorsForTheme(theme, ctx);
@@ -394,7 +395,7 @@ const RENDERERS = {
       </div>`;
   },
 
-  /* ─── Editorial — serif masthead, chips, accent rule ──────── */
+  /* Editorial — serif masthead, chips for links, accent rule. */
   editorial: (p, ctx) => {
     const { theme, accent, interactive } = ctx;
     const c = colorsForTheme(theme, ctx);
@@ -422,7 +423,7 @@ const RENDERERS = {
       </div>`;
   },
 
-  /* ─── Bento — tiles grid ──────────────────────────────────── */
+  /* Bento — tile grid, header tile spans both columns. */
   bento: (p, ctx) => {
     const { theme, accent, interactive } = ctx;
     const c = colorsForTheme(theme, ctx);
@@ -448,7 +449,7 @@ const RENDERERS = {
       </div>`;
   },
 
-  /* ─── Poster — billboard serif ────────────────────────────── */
+  /* Poster — billboard serif, name is the hero element. */
   poster: (p, ctx) => {
     const { theme, accent, interactive } = ctx;
     const c = colorsForTheme(theme, ctx);
@@ -475,7 +476,7 @@ const RENDERERS = {
       </div>`;
   },
 
-  /* ─── Compact — dense 2-column link grid ──────────────────── */
+  /* Compact — dense card, 2-column link grid, minimal chrome. */
   compact: (p, ctx) => {
     const { theme, accent, interactive } = ctx;
     const c = colorsForTheme(theme, ctx);
