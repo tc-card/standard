@@ -5,9 +5,9 @@ const CONFIG = {
   defaultBg: 'url(https://www.tccards.tn/Assets/background.png) center fixed',
   defaultProfilePic: 'https://www.tccards.tn/Assets/default.png',
   databases: {
-    id: 'AKfycbyjSiucNkuqZ5ngFV5AwX1rG1ZKSuEmZLmU1mffvW4MDIpxxMhUcuUjc6actnXam9vjdw',
+    id: 'AKfycbw4BEBs0sJfrnwOimlfbTdVdd4JnNvG7rdBEz-bb_oBw5IJNigxNkBi8cMYQL63Yf_hkg',
   },
-  analyticsEndpoint: 'https://script.google.com/macros/s/AKfycbyjSiucNkuqZ5ngFV5AwX1rG1ZKSuEmZLmU1mffvW4MDIpxxMhUcuUjc6actnXam9vjdw/exec',
+  analyticsEndpoint: 'https://script.google.com/macros/s/AKfycbw4BEBs0sJfrnwOimlfbTdVdd4JnNvG7rdBEz-bb_oBw5IJNigxNkBi8cMYQL63Yf_hkg/exec',
 };
 
 /* #random picks a real profile so the URL resolves cleanly. */
