@@ -6,10 +6,10 @@ We actively monitor and patch our deployment workflows, Cloudflare Worker routes
 
 | Version | Supported          | Environment / Scope |
 | ------- | ------------------ | ------------------- |
-| Live (v1.x) | :white_check_mark: | `my.tccards.tn` Live Infrastructure |
+| Live (v2.x) | :white_check_mark: | `my.tccards.tn` Live Infrastructure |
 | Main Branch | :white_check_mark: | GitHub Pages & Active Actions Workflows |
 | Beta / Dev  | :x:                | Experimental Testing Workflows |
-| Legacy (v0.x)| :x:               | Obsolete Proof-of-Concept Repositories |
+| Legacy (v1.x)| :x:               | Obsolete Proof-of-Concept Repositories |
 
 ---
 
